@@ -2,8 +2,14 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ReplySuggestion, ChatPersona } from "../types";
 
-// Initialize AI
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+// 安全获取 AI 实例
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("API_KEY 未配置，请在 Vercel 环境变量中设置。");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 export const generateReplySuggestions = async (prompt: string): Promise<ReplySuggestion[]> => {
   const ai = getAI();

@@ -71,12 +71,11 @@ const App: React.FC = () => {
       recognition.onend = () => setIsRecording(false);
       recognitionRef.current = recognition;
     }
-
-    chatInstanceRef.current = getChatModel(chatPersona);
   }, []);
 
+  // 当切换人格时清空当前对话实例，下次发送会自动重新初始化
   useEffect(() => {
-    chatInstanceRef.current = getChatModel(chatPersona);
+    chatInstanceRef.current = null;
     setChatMessages([]);
   }, [chatPersona]);
 
@@ -111,8 +110,9 @@ const App: React.FC = () => {
     try {
       const results = await generateReplySuggestions(input);
       setSuggestions(results);
-    } catch (error) {
-      alert("生成建议失败，请检查配置。");
+    } catch (error: any) {
+      console.error(error);
+      alert(error.message || "生成失败，请检查 API Key。");
     } finally {
       setIsLoading(false);
     }
@@ -120,6 +120,17 @@ const App: React.FC = () => {
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
+    
+    // 懒加载初始化聊天实例
+    if (!chatInstanceRef.current) {
+      try {
+        chatInstanceRef.current = getChatModel(chatPersona);
+      } catch (error: any) {
+        alert(error.message);
+        return;
+      }
+    }
+
     const userMsg: ChatMessage = { role: 'user', text: input, timestamp: new Date().toLocaleTimeString() };
     setChatMessages(prev => [...prev, userMsg]);
     setInput('');
@@ -130,8 +141,9 @@ const App: React.FC = () => {
       const aiMsg: ChatMessage = { role: 'model', text: response.text || '', timestamp: new Date().toLocaleTimeString() };
       setChatMessages(prev => [...prev, aiMsg]);
       if (isTtsEnabled) speak(aiMsg.text);
-    } catch (error) {
-      alert("对话中断，请重试。");
+    } catch (error: any) {
+      console.error(error);
+      alert("对话出错，请重试。可能是 API Key 无效或额度超限。");
     } finally {
       setIsLoading(false);
     }
@@ -153,10 +165,10 @@ const App: React.FC = () => {
       };
       saveDiaries([newEntry, ...diaries]);
       setChatMessages([]);
-      chatInstanceRef.current = getChatModel(chatPersona);
+      chatInstanceRef.current = null;
       setActiveTab('diary');
-    } catch (error) {
-      alert("生成日记失败，请重试。");
+    } catch (error: any) {
+      alert("生成日记失败：" + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -194,7 +206,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen pb-20 overflow-x-hidden">
-      {/* Header */}
       <header className="sticky top-0 z-20 bg-white/80 backdrop-blur-md p-4 flex justify-between items-center h-16 border-b border-[#F5E1E5]">
         <div className="flex items-center gap-2">
           <div className="w-10 h-10 bg-gradient-to-br from-[#FFB6C1] to-[#FF9999] rounded-cute flex items-center justify-center shadow-soft inner-glow">
@@ -213,7 +224,6 @@ const App: React.FC = () => {
       <main className="flex-1 max-w-lg mx-auto w-full relative">
         {activeTab === 'home' && (
           <div className="flex flex-col h-full animate-in fade-in slide-in-from-bottom-2 duration-500">
-            {/* Mode Switcher */}
             <div className="flex p-4 gap-3 sticky top-16 z-10">
               <button 
                 onClick={() => setHomeMode('reply')}
@@ -256,7 +266,7 @@ const App: React.FC = () => {
                       <button
                         onClick={handleGetSuggestions}
                         disabled={isLoading || !input.trim()}
-                        className="flex-1 bg-gradient-to-r from-[#FFB6C1] to-[#FF9999] text-white rounded-cute font-bold shadow-lg btn-bounce disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
+                        className="flex-1 bg-gradient-to-r from-[#FFB6C1] to-[#FF9999] text-white rounded-cute font-bold shadow-lg btn-bounce disabled:opacity-50 flex items-center justify-center gap-2"
                       >
                         {isLoading ? <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <>生成话术 <Sparkles size={18}/></>}
                       </button>
@@ -293,7 +303,6 @@ const App: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex flex-col h-[calc(100vh-320px)] animate-in slide-in-from-right-4 duration-300">
-                  {/* Persona Selector */}
                   <div className="flex gap-3 mb-5 overflow-x-auto pb-2 scrollbar-hide px-1">
                     {[
                       { id: 'senior', name: '理性前辈', icon: User, color: '#E6E6FA' },
@@ -342,7 +351,6 @@ const App: React.FC = () => {
                     <div ref={chatEndRef} />
                   </div>
 
-                  {/* Input Bar */}
                   <div className="fixed bottom-24 left-0 right-0 px-4 max-w-lg mx-auto">
                     <div className="flex gap-2 items-center bg-white p-2 rounded-cute-lg shadow-soft border border-[#F5E1E5]">
                       <button 
@@ -389,7 +397,6 @@ const App: React.FC = () => {
         {activeTab === 'relax' && <RelaxView />}
       </main>
 
-      {/* Footer Navigation */}
       <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F5E1E5] flex justify-around items-center safe-bottom z-30 h-20 px-2 shadow-[0_-5px_15px_rgba(74,44,42,0.02)]">
         <TabButton id="home" icon={HomeIcon} label="信号调节" />
         <TabButton id="diary" icon={DiaryIcon} label="心情日记" />
@@ -419,8 +426,8 @@ const MoodDiaryView: React.FC<{ diaries: DiaryEntry[]; saveDiaries: (d: DiaryEnt
       };
       saveDiaries([newEntry, ...diaries]);
       setContent('');
-    } catch (error) {
-      alert("保存失败，请重试。");
+    } catch (error: any) {
+      alert("保存失败：" + error.message);
     } finally {
       setIsProcessing(false);
     }
