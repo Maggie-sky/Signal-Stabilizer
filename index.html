@@ -1,0 +1,96 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>信号稳定器 - 温暖治愈的职场伴侣</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#FFF8F0">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        
+        :root {
+            --bg-warm: #FFF8F0;
+            --text-main: #4A2C2A;
+            --accent-pink: #FF9999;
+            --soft-peach: #FFB6C1;
+            --cream-yellow: #FFFACD;
+            --mint-green: #D4F4DD;
+            --lavender: #E6E6FA;
+        }
+
+        body {
+            font-family: 'ui-rounded', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-warm);
+            color: var(--text-main);
+            -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+        }
+
+        .rounded-cute { border-radius: 24px; }
+        .rounded-cute-lg { border-radius: 32px; }
+
+        .shadow-soft {
+            box-shadow: 0 8px 30px rgba(74, 44, 42, 0.05);
+        }
+
+        .inner-glow {
+            box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.5);
+        }
+
+        .btn-bounce {
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .btn-bounce:active {
+            transform: scale(0.92);
+        }
+
+        .chat-bubble-user {
+            background-color: var(--soft-peach);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .chat-bubble-ai {
+            background-color: white;
+            color: var(--text-main);
+            border-bottom-left-radius: 4px;
+            border: 2px solid #F5E1E5;
+        }
+
+        .safe-bottom {
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+
+        /* Decorative Background elements */
+        .decor-blob {
+            position: fixed;
+            z-index: -1;
+            filter: blur(60px);
+            opacity: 0.4;
+            pointer-events: none;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.40.0"
+  }
+}
+</script>
+</head>
+<body class="overflow-x-hidden">
+    <!-- Decorative elements -->
+    <div class="decor-blob bg-pink-200 w-64 h-64 top-[-10%] right-[-10%] rounded-full"></div>
+    <div class="decor-blob bg-yellow-100 w-80 h-80 bottom-[-10%] left-[-10%] rounded-full"></div>
+    
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>

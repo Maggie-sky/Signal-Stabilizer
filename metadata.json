@@ -1,0 +1,7 @@
+{
+  "name": "信号稳定器 (Signal Stabilizer)",
+  "description": "面向轨道交通工程师的压力缓解与情绪支持 PWA。提供理性前辈与暖心朋友的混合语气建议，支持语音交互、AI 心情总结及治愈绘图。",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
