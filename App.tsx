@@ -112,7 +112,7 @@ const App: React.FC = () => {
       setSuggestions(results);
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "生成失败，请检查 API Key。");
+      alert(error.message || "生成失败，可能是网络波动，请稍后再试。");
     } finally {
       setIsLoading(false);
     }
@@ -136,14 +136,27 @@ const App: React.FC = () => {
     setInput('');
     setIsLoading(true);
 
+    // 重试逻辑
+    const sendMessageWithRetry = async (msg: string, retries = 2): Promise<any> => {
+      try {
+        return await chatInstanceRef.current.sendMessage({ message: msg });
+      } catch (err: any) {
+        if (retries > 0 && (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('500'))) {
+          await new Promise(r => setTimeout(r, 2000));
+          return sendMessageWithRetry(msg, retries - 1);
+        }
+        throw err;
+      }
+    };
+
     try {
-      const response = await chatInstanceRef.current.sendMessage({ message: input });
+      const response = await sendMessageWithRetry(userMsg.text);
       const aiMsg: ChatMessage = { role: 'model', text: response.text || '', timestamp: new Date().toLocaleTimeString() };
       setChatMessages(prev => [...prev, aiMsg]);
       if (isTtsEnabled) speak(aiMsg.text);
     } catch (error: any) {
       console.error(error);
-      alert("对话出错，请重试。可能是 API Key 无效或额度超限。");
+      alert("对话暂时中断，请检查网络连接后重试。");
     } finally {
       setIsLoading(false);
     }
@@ -427,7 +440,7 @@ const MoodDiaryView: React.FC<{ diaries: DiaryEntry[]; saveDiaries: (d: DiaryEnt
       saveDiaries([newEntry, ...diaries]);
       setContent('');
     } catch (error: any) {
-      alert("保存失败：" + error.message);
+      alert("保存失败，可能是网络繁忙，请稍后再试。");
     } finally {
       setIsProcessing(false);
     }
