@@ -26,7 +26,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { AppTab, HomeMode, ReplySuggestion, DiaryEntry, ChatMessage, UserStats, ChatPersona } from './types';
-import { generateReplySuggestions, summarizeDiary, generateHealingImage, getChatModel } from './services/geminiService';
+import { generateReplySuggestions, summarizeDiary, getChatModel } from './services/geminiService';
 import { HEALING_QUOTES, RELAX_ARTICLES, DEFAULT_KEYWORDS, BREATHING_STEPS } from './constants';
 
 const App: React.FC = () => {
@@ -73,7 +73,6 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // 当切换人格时清空当前对话实例，下次发送会自动重新初始化
   useEffect(() => {
     chatInstanceRef.current = null;
     setChatMessages([]);
@@ -112,7 +111,7 @@ const App: React.FC = () => {
       setSuggestions(results);
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "生成失败，可能是网络波动，请稍后再试。");
+      alert("生成请求失败。建议检查 Vercel 环境变量 API_KEY 是否配置正确，或者网络连接是否稳定。");
     } finally {
       setIsLoading(false);
     }
@@ -121,7 +120,6 @@ const App: React.FC = () => {
   const handleSendMessage = async () => {
     if (!input.trim()) return;
     
-    // 懒加载初始化聊天实例
     if (!chatInstanceRef.current) {
       try {
         chatInstanceRef.current = getChatModel(chatPersona);
@@ -136,13 +134,12 @@ const App: React.FC = () => {
     setInput('');
     setIsLoading(true);
 
-    // 重试逻辑
     const sendMessageWithRetry = async (msg: string, retries = 2): Promise<any> => {
       try {
         return await chatInstanceRef.current.sendMessage({ message: msg });
       } catch (err: any) {
-        if (retries > 0 && (err.message?.includes('fetch') || err.message?.includes('network') || err.message?.includes('500'))) {
-          await new Promise(r => setTimeout(r, 2000));
+        if (retries > 0) {
+          await new Promise(r => setTimeout(r, 1500));
           return sendMessageWithRetry(msg, retries - 1);
         }
         throw err;
@@ -156,7 +153,7 @@ const App: React.FC = () => {
       if (isTtsEnabled) speak(aiMsg.text);
     } catch (error: any) {
       console.error(error);
-      alert("对话暂时中断，请检查网络连接后重试。");
+      alert("对话出现故障。可能是由于 API 额度超限或连接超时，请稍后刷新重试。");
     } finally {
       setIsLoading(false);
     }
@@ -168,20 +165,19 @@ const App: React.FC = () => {
     try {
       const fullHistory = chatMessages.map(m => `${m.role === 'user' ? '用户' : 'AI'}: ${m.text}`).join('\n');
       const summary = await summarizeDiary(fullHistory);
-      const imageUrl = await generateHealingImage(summary);
       const newEntry: DiaryEntry = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
-        content: `与[${getPersonaName(chatPersona)}]的对话回顾：\n${fullHistory.slice(0, 500)}...`,
+        content: `与[${getPersonaName(chatPersona)}]的对话回顾：\n${fullHistory.slice(0, 800)}...`,
         summary,
-        images: imageUrl ? [imageUrl] : []
+        images: [] // 移除图片生成逻辑，传入空数组
       };
       saveDiaries([newEntry, ...diaries]);
       setChatMessages([]);
       chatInstanceRef.current = null;
       setActiveTab('diary');
     } catch (error: any) {
-      alert("生成日记失败：" + error.message);
+      alert("保存日记失败：" + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -196,8 +192,7 @@ const App: React.FC = () => {
   const speak = (text: string) => {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    const englishCount = (text.match(/[a-zA-Z]/g) || []).length;
-    utterance.lang = (englishCount > text.length * 0.4) ? 'en-US' : 'zh-CN';
+    utterance.lang = 'zh-CN';
     window.speechSynthesis.speak(utterance);
   };
 
@@ -263,7 +258,7 @@ const App: React.FC = () => {
                     <textarea 
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      placeholder="收到消息了？粘贴在这里，我来帮你写回复..."
+                      placeholder="粘贴消息，我来帮你回复..."
                       className="w-full h-44 p-5 rounded-cute bg-[#FFF8F0] border-none focus:ring-2 focus:ring-[#FFB6C1] resize-none text-[#4A2C2A] text-sm mb-4 placeholder-[#5C4033]/30 shadow-inner"
                     />
                     <div className="flex gap-3">
@@ -301,10 +296,7 @@ const App: React.FC = () => {
                           <p className="text-[#4A2C2A] font-medium text-sm leading-relaxed">{s.text}</p>
                         </div>
                         <div className="space-y-3 text-xs">
-                          <div className="flex gap-2">
-                            <span className="text-[#FF9999] font-bold">●</span>
-                            <p className="text-[#5C4033]/60 italic">分析：{s.rationalAnalysis}</p>
-                          </div>
+                          <div className="flex gap-2 text-[#5C4033]/60 italic">分析：{s.rationalAnalysis}</div>
                           <div className="flex gap-2 p-3 bg-pink-50/50 rounded-cute border border-pink-100">
                             <Heart size={12} className="text-[#FF9999] shrink-0 mt-0.5" />
                             <p className="text-[#4A2C2A] font-bold">心语：{s.warmSupport}</p>
@@ -318,9 +310,9 @@ const App: React.FC = () => {
                 <div className="flex flex-col h-[calc(100vh-320px)] animate-in slide-in-from-right-4 duration-300">
                   <div className="flex gap-3 mb-5 overflow-x-auto pb-2 scrollbar-hide px-1">
                     {[
-                      { id: 'senior', name: '理性前辈', icon: User, color: '#E6E6FA' },
-                      { id: 'mentor', name: '心理导师', icon: Brain, color: '#D4F4DD' },
-                      { id: 'friend', name: '暖心好友', icon: Coffee, color: '#FFFACD' }
+                      { id: 'senior', name: '理性前辈', icon: User },
+                      { id: 'mentor', name: '心理导师', icon: Brain },
+                      { id: 'friend', name: '暖心好友', icon: Coffee }
                     ].map(p => (
                       <button
                         key={p.id}
@@ -339,7 +331,7 @@ const App: React.FC = () => {
                         <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-soft">
                           <Cloud size={48} className="text-[#FFB6C1]" />
                         </div>
-                        <p className="text-sm font-medium">正在与 {getPersonaName(chatPersona)} 对话<br/>压力大的时候，随时找我聊聊</p>
+                        <p className="text-sm font-medium">压力大的时候，随时找我聊聊</p>
                       </div>
                     )}
                     {chatMessages.map((m, i) => (
@@ -353,11 +345,7 @@ const App: React.FC = () => {
                     {isLoading && (
                       <div className="flex justify-start">
                         <div className="bg-white p-4 rounded-[20px] rounded-tl-none shadow-soft border border-[#F5E1E5]">
-                          <div className="flex gap-1.5">
-                            <div className="w-2 h-2 bg-[#FFB6C1] rounded-full animate-bounce"></div>
-                            <div className="w-2 h-2 bg-[#FFB6C1] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                            <div className="w-2 h-2 bg-[#FFB6C1] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                          </div>
+                          <div className="flex gap-1.5 animate-pulse">...</div>
                         </div>
                       </div>
                     )}
@@ -371,7 +359,7 @@ const App: React.FC = () => {
                         onMouseUp={handleStopRecording}
                         onTouchStart={handleStartRecording}
                         onTouchEnd={handleStopRecording}
-                        className={`w-12 h-12 rounded-cute flex items-center justify-center transition-all ${isRecording ? 'bg-[#FF9999] text-white animate-pulse shadow-inner' : 'bg-[#FFF8F0] text-[#E9967A]'}`}
+                        className={`w-12 h-12 rounded-cute flex items-center justify-center ${isRecording ? 'bg-[#FF9999] text-white animate-pulse' : 'bg-[#FFF8F0] text-[#E9967A]'}`}
                       >
                         <Mic size={20} />
                       </button>
@@ -380,12 +368,12 @@ const App: React.FC = () => {
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
                         placeholder={`向${getPersonaName(chatPersona)}倾诉...`}
-                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 text-[#4A2C2A] placeholder-[#5C4033]/30"
+                        className="flex-1 bg-transparent border-none focus:ring-0 text-sm py-2 text-[#4A2C2A]"
                       />
                       <button 
                         onClick={handleSendMessage}
                         disabled={isLoading || !input.trim()}
-                        className="w-12 h-12 bg-gradient-to-br from-[#FFB6C1] to-[#FF9999] text-white rounded-cute flex items-center justify-center disabled:opacity-30 shadow-md btn-bounce"
+                        className="w-12 h-12 bg-gradient-to-br from-[#FFB6C1] to-[#FF9999] text-white rounded-cute flex items-center justify-center disabled:opacity-30"
                       >
                         <Send size={20} />
                       </button>
@@ -393,9 +381,9 @@ const App: React.FC = () => {
                     {chatMessages.length > 0 && (
                       <button 
                         onClick={handleEndAndSaveChat}
-                        className="w-full mt-4 py-3 bg-[#FFFACD] text-[#E9967A] rounded-cute text-xs font-bold flex items-center justify-center gap-2 shadow-sm btn-bounce border border-[#FFE4C4]"
+                        className="w-full mt-4 py-3 bg-[#FFFACD] text-[#E9967A] rounded-cute text-xs font-bold flex items-center justify-center gap-2 shadow-sm border border-[#FFE4C4]"
                       >
-                        <Save size={16} /> 生成心情日记并存档 🧸
+                        <Save size={16} /> 归纳今日心情日记 🧸
                       </button>
                     )}
                   </div>
@@ -410,7 +398,7 @@ const App: React.FC = () => {
         {activeTab === 'relax' && <RelaxView />}
       </main>
 
-      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F5E1E5] flex justify-around items-center safe-bottom z-30 h-20 px-2 shadow-[0_-5px_15px_rgba(74,44,42,0.02)]">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-md border-t border-[#F5E1E5] flex justify-around items-center safe-bottom z-30 h-20 px-2 shadow-sm">
         <TabButton id="home" icon={HomeIcon} label="信号调节" />
         <TabButton id="diary" icon={DiaryIcon} label="心情日记" />
         <TabButton id="calendar" icon={CalendarIcon} label="回顾" />
@@ -429,18 +417,17 @@ const MoodDiaryView: React.FC<{ diaries: DiaryEntry[]; saveDiaries: (d: DiaryEnt
     setIsProcessing(true);
     try {
       const summary = await summarizeDiary(content);
-      const imageUrl = await generateHealingImage(summary);
       const newEntry: DiaryEntry = {
         id: Date.now().toString(),
         date: new Date().toISOString(),
         content,
         summary,
-        images: imageUrl ? [imageUrl] : []
+        images: [] // 移除图片生成，直接存文字
       };
       saveDiaries([newEntry, ...diaries]);
       setContent('');
     } catch (error: any) {
-      alert("保存失败，可能是网络繁忙，请稍后再试。");
+      alert("保存心情失败。请重试，或检查网络连接。");
     } finally {
       setIsProcessing(false);
     }
@@ -456,14 +443,14 @@ const MoodDiaryView: React.FC<{ diaries: DiaryEntry[]; saveDiaries: (d: DiaryEnt
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="今天的信号灯稳吗？写下你想说的..."
-          className="w-full h-44 p-5 rounded-cute bg-[#FFF8F0] border-none focus:ring-2 focus:ring-[#FFB6C1] resize-none text-[#4A2C2A] text-sm mb-4 placeholder-[#5C4033]/30 shadow-inner"
+          className="w-full h-44 p-5 rounded-cute bg-[#FFF8F0] border-none focus:ring-2 focus:ring-[#FFB6C1] resize-none text-[#4A2C2A] text-sm mb-4 shadow-inner"
         />
         <button
           onClick={handleSaveDiary}
           disabled={isProcessing || !content.trim()}
-          className="w-full py-4 bg-gradient-to-r from-[#FFB6C1] to-[#FF9999] text-white rounded-cute font-bold shadow-lg btn-bounce disabled:opacity-50"
+          className="w-full py-4 bg-gradient-to-r from-[#FFB6C1] to-[#FF9999] text-white rounded-cute font-bold shadow-lg disabled:opacity-50"
         >
-          {isProcessing ? '正在为你感应插画...' : '封存此刻心情 ✨'}
+          {isProcessing ? '正在感应你的心情...' : '封存此刻心情 ✨'}
         </button>
       </section>
 
@@ -471,12 +458,11 @@ const MoodDiaryView: React.FC<{ diaries: DiaryEntry[]; saveDiaries: (d: DiaryEnt
         {diaries.length === 0 && (
           <div className="text-center py-16 opacity-30">
             <Heart size={48} className="mx-auto mb-4" />
-            <p className="text-sm font-medium">暂无日记，去聊天或记录吧</p>
+            <p className="text-sm font-medium">暂无日记，去聊天或手动记录吧</p>
           </div>
         )}
         {diaries.map(entry => (
-          <div key={entry.id} className="bg-white rounded-cute-lg overflow-hidden shadow-soft border border-[#F5E1E5] animate-in slide-up duration-500">
-            {entry.images[0] && <img src={entry.images[0]} alt="Art" className="w-full h-56 object-cover" />}
+          <div key={entry.id} className="bg-white rounded-cute-lg overflow-hidden shadow-soft border border-[#F5E1E5]">
             <div className="p-6">
               <div className="text-[10px] text-[#FF9999] mb-2 font-bold uppercase tracking-widest">{new Date(entry.date).toLocaleString()}</div>
               <p className="text-sm text-[#4A2C2A] font-bold italic mb-3 leading-relaxed">“{entry.summary}”</p>
@@ -516,7 +502,7 @@ const CalendarView: React.FC<{ diaries: DiaryEntry[] }> = ({ diaries }) => {
               <button 
                 key={day} 
                 onClick={() => entry && setSelectedEntry(entry)}
-                className={`aspect-square rounded-full flex items-center justify-center text-sm transition-all btn-bounce ${entry ? 'bg-gradient-to-br from-[#FFB6C1] to-[#FF9999] text-white font-bold scale-110 shadow-md' : 'bg-[#FFF8F0] text-[#5C4033]/40'}`}
+                className={`aspect-square rounded-full flex items-center justify-center text-sm transition-all ${entry ? 'bg-[#FFB6C1] text-white font-bold scale-110' : 'bg-[#FFF8F0] text-[#5C4033]/40'}`}
               >
                 {day}
               </button>
@@ -527,17 +513,12 @@ const CalendarView: React.FC<{ diaries: DiaryEntry[] }> = ({ diaries }) => {
 
       {selectedEntry && (
         <div className="fixed inset-0 z-50 bg-[#4A2C2A]/60 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setSelectedEntry(null)}>
-          <div className="bg-[#FFF8F0] rounded-cute-lg w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="relative">
-              {selectedEntry.images[0] && <img src={selectedEntry.images[0]} alt="Art" className="w-full h-64 object-cover" />}
-              <button onClick={() => setSelectedEntry(null)} className="absolute top-4 right-4 bg-white/80 p-2 rounded-full text-[#4A2C2A] shadow-md"><X size={20} /></button>
-            </div>
-            <div className="p-8">
-              <div className="text-[10px] text-[#FF9999] font-bold mb-3 uppercase tracking-widest">{new Date(selectedEntry.date).toLocaleDateString()} 记忆</div>
-              <h3 className="font-bold text-lg mb-4 text-[#4A2C2A] leading-relaxed italic">“{selectedEntry.summary}”</h3>
-              <div className="max-h-44 overflow-y-auto pr-2 scrollbar-hide text-[#5C4033] text-sm leading-loose">
-                {selectedEntry.content}
-              </div>
+          <div className="bg-[#FFF8F0] rounded-cute-lg w-full max-w-sm overflow-hidden p-8 relative">
+            <button onClick={() => setSelectedEntry(null)} className="absolute top-4 right-4 text-[#4A2C2A] opacity-50"><X size={20} /></button>
+            <div className="text-[10px] text-[#FF9999] font-bold mb-3 uppercase tracking-widest">{new Date(selectedEntry.date).toLocaleDateString()} 心情回顾</div>
+            <h3 className="font-bold text-lg mb-4 text-[#4A2C2A] italic">“{selectedEntry.summary}”</h3>
+            <div className="max-h-64 overflow-y-auto text-[#5C4033] text-sm leading-loose">
+              {selectedEntry.content}
             </div>
           </div>
         </div>
@@ -564,28 +545,26 @@ const RelaxView: React.FC = () => {
   return (
     <div className="p-4 pb-24 space-y-6 animate-in fade-in duration-300">
       <section className="bg-white rounded-cute-lg p-8 relative overflow-hidden shadow-soft border border-[#F5E1E5]">
-        <div className="absolute top-[-20px] left-[-20px] w-32 h-32 bg-[#FFB6C1]/10 rounded-full blur-2xl"></div>
         <History className="text-[#FF9999] mb-4" />
         <p className="text-xl font-bold leading-relaxed mb-4 text-[#4A2C2A]">{quote.cn}</p>
-        <p className="text-xs text-[#5C4033]/40 italic mb-8 leading-relaxed">"{quote.en}"</p>
+        <p className="text-xs text-[#5C4033]/40 italic mb-8">"{quote.en}"</p>
         <button 
           onClick={() => setQuote(HEALING_QUOTES[Math.floor(Math.random()*HEALING_QUOTES.length)])} 
-          className="py-2 px-4 rounded-full bg-[#FFF8F0] text-xs text-[#E9967A] font-bold flex items-center gap-2 hover:bg-[#FFE4C4] transition-colors btn-bounce"
+          className="py-2 px-4 rounded-full bg-[#FFF8F0] text-xs text-[#E9967A] font-bold flex items-center gap-2"
         >
           换一句语录 <ArrowRight size={14} />
         </button>
       </section>
 
-      <section className="bg-white p-10 rounded-cute-lg text-center border border-[#F5E1E5] shadow-soft relative overflow-hidden">
-        <div className={`w-36 h-36 mx-auto rounded-full border-8 border-[#FFF8F0] flex items-center justify-center mb-8 transition-all duration-1000 ${isBreathing ? 'scale-125 bg-[#FFFACD]/30 border-[#FFB6C1]/20' : 'bg-transparent shadow-inner'}`}>
+      <section className="bg-white p-10 rounded-cute-lg text-center border border-[#F5E1E5] shadow-soft">
+        <div className={`w-36 h-36 mx-auto rounded-full border-8 border-[#FFF8F0] flex items-center justify-center mb-8 transition-all duration-1000 ${isBreathing ? 'scale-125 bg-[#FFFACD]/30 border-[#FFB6C1]/20' : ''}`}>
            <RelaxIcon size={48} className={`text-[#FF9999] ${isBreathing ? 'animate-pulse' : ''}`} />
         </div>
         <h3 className="text-lg font-bold mb-2 text-[#4A2C2A]">4-7-8 呼吸放松法</h3>
-        <p className="text-xs text-[#5C4033]/50 mb-10 leading-relaxed px-6">有节奏的呼吸能有效安抚紧张的神经系统</p>
         <button 
           onClick={startBreathing}
           disabled={isBreathing}
-          className="w-full py-4 bg-gradient-to-r from-[#FFB6C1] to-[#FF9999] text-white rounded-cute font-bold shadow-lg shadow-pink-200 active:scale-95 transition-all text-sm tracking-widest"
+          className="w-full py-4 bg-gradient-to-r from-[#FFB6C1] to-[#FF9999] text-white rounded-cute font-bold shadow-lg"
         >
           {breathText}
         </button>
@@ -601,12 +580,10 @@ const RelaxView: React.FC = () => {
             href={article.url} 
             target="_blank" 
             rel="noopener noreferrer"
-            className="flex items-center justify-between p-5 bg-white rounded-cute-lg border border-[#F5E1E5] hover:border-[#FFB6C1] transition-all shadow-sm group active:scale-98"
+            className="flex items-center justify-between p-5 bg-white rounded-cute-lg border border-[#F5E1E5] hover:border-[#FFB6C1] transition-all"
           >
-            <span className="text-sm text-[#4A2C2A] font-bold group-hover:text-[#FF9999] transition-colors">{article.title}</span>
-            <div className="w-8 h-8 rounded-full bg-[#FFF8F0] flex items-center justify-center text-[#E9967A]">
-              <ExternalLink size={14} />
-            </div>
+            <span className="text-sm text-[#4A2C2A] font-bold">{article.title}</span>
+            <ExternalLink size={14} className="text-[#E9967A]" />
           </a>
         ))}
       </section>

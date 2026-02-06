@@ -13,9 +13,9 @@ export const HEALING_QUOTES = [
 ];
 
 export const RELAX_ARTICLES = [
-  { title: "世卫组织：如何应对生活中的压力 (Q&A)", url: "https://www.who.int/zh/news-room/questions-and-answers/item/stress" },
-  { title: "默沙东手册：了解压力及其管理建议", url: "https://www.msdmanuals.cn/home/special-subjects/stress/management-of-stress" },
-  { title: "丁香医生：职场高压下的心理健康指南", url: "https://m.dxy.com/column/7221" }
+  { title: "世界卫生组织：如何应对压力（官方指南）", url: "https://www.who.int/zh/news-room/questions-and-answers/item/stress" },
+  { title: "默沙东诊疗手册：压力的理解与管理建议", url: "https://www.msdmanuals.cn/home/special-subjects/stress/management-of-stress" },
+  { title: "丁香医生：职场高压生活，如何保护心理健康", url: "https://dxy.com/column/7221" }
 ];
 
 export const DEFAULT_KEYWORDS = ["CBTC", "联锁", "信号机", "继电器", "转辙机", "ATC", "ATO", "天窗期"];
