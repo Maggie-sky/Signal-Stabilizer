@@ -26,7 +26,7 @@ import {
   Cloud
 } from 'lucide-react';
 import { AppTab, HomeMode, ReplySuggestion, DiaryEntry, ChatMessage, UserStats, ChatPersona } from './types';
-import { generateReplySuggestions, summarizeDiary, getChatModel } from './services/geminiService';
+import { generateReplySuggestions, summarizeDiary, sendChatMessage } from './services/apiService';
 import { HEALING_QUOTES, RELAX_ARTICLES, DEFAULT_KEYWORDS, BREATHING_STEPS } from './constants';
 
 const App: React.FC = () => {
@@ -40,18 +40,14 @@ const App: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTtsEnabled, setIsTtsEnabled] = useState(false);
   const [diaries, setDiaries] = useState<DiaryEntry[]>([]);
-  const [stats, setStats] = useState<UserStats>({ preferredToneCount: {}, keywords: DEFAULT_KEYWORDS });
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const recognitionRef = useRef<any>(null);
-  const chatInstanceRef = useRef<any>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const savedDiaries = localStorage.getItem('diaries');
     if (savedDiaries) setDiaries(JSON.parse(savedDiaries));
-    const savedStats = localStorage.getItem('stats');
-    if (savedStats) setStats(JSON.parse(savedStats));
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
@@ -59,7 +55,6 @@ const App: React.FC = () => {
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'zh-CN';
-      
       recognition.onresult = (event: any) => {
         let transcript = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -74,7 +69,6 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    chatInstanceRef.current = null;
     setChatMessages([]);
   }, [chatPersona]);
 
@@ -111,49 +105,29 @@ const App: React.FC = () => {
       setSuggestions(results);
     } catch (error: any) {
       console.error(error);
-      alert("生成请求失败。建议检查 Vercel 环境变量 API_KEY 是否配置正确，或者网络连接是否稳定。");
+      alert(error.message || "生成失败，请检查环境变量配置。");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim()) return;
+    if (!input.trim() || isLoading) return;
     
-    if (!chatInstanceRef.current) {
-      try {
-        chatInstanceRef.current = getChatModel(chatPersona);
-      } catch (error: any) {
-        alert(error.message);
-        return;
-      }
-    }
-
     const userMsg: ChatMessage = { role: 'user', text: input, timestamp: new Date().toLocaleTimeString() };
+    const currentInput = input;
     setChatMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
 
-    const sendMessageWithRetry = async (msg: string, retries = 2): Promise<any> => {
-      try {
-        return await chatInstanceRef.current.sendMessage({ message: msg });
-      } catch (err: any) {
-        if (retries > 0) {
-          await new Promise(r => setTimeout(r, 1500));
-          return sendMessageWithRetry(msg, retries - 1);
-        }
-        throw err;
-      }
-    };
-
     try {
-      const response = await sendMessageWithRetry(userMsg.text);
-      const aiMsg: ChatMessage = { role: 'model', text: response.text || '', timestamp: new Date().toLocaleTimeString() };
+      const reply = await sendChatMessage(chatPersona, chatMessages, currentInput);
+      const aiMsg: ChatMessage = { role: 'model', text: reply, timestamp: new Date().toLocaleTimeString() };
       setChatMessages(prev => [...prev, aiMsg]);
       if (isTtsEnabled) speak(aiMsg.text);
     } catch (error: any) {
       console.error(error);
-      alert("对话出现故障。可能是由于 API 额度超限或连接超时，请稍后刷新重试。");
+      alert("对话中断：" + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -170,11 +144,10 @@ const App: React.FC = () => {
         date: new Date().toISOString(),
         content: `与[${getPersonaName(chatPersona)}]的对话回顾：\n${fullHistory.slice(0, 800)}...`,
         summary,
-        images: [] // 移除图片生成逻辑，传入空数组
+        images: []
       };
       saveDiaries([newEntry, ...diaries]);
       setChatMessages([]);
-      chatInstanceRef.current = null;
       setActiveTab('diary');
     } catch (error: any) {
       alert("保存日记失败：" + error.message);
@@ -221,7 +194,7 @@ const App: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-[#4A2C2A] leading-none">信号稳定器</h1>
-            <span className="text-[9px] text-[#E9967A] font-medium tracking-wider">SOFT & WARM COMPANION</span>
+            <span className="text-[9px] text-[#E9967A] font-medium tracking-wider">POWERED BY QWEN</span>
           </div>
         </div>
         <button onClick={() => setIsTtsEnabled(!isTtsEnabled)} className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors ${isTtsEnabled ? 'bg-[#FFB6C1] text-white' : 'bg-[#FFF0E8] text-[#E9967A]'}`}>
@@ -331,7 +304,7 @@ const App: React.FC = () => {
                         <div className="w-24 h-24 bg-white rounded-full flex items-center justify-center mb-6 shadow-soft">
                           <Cloud size={48} className="text-[#FFB6C1]" />
                         </div>
-                        <p className="text-sm font-medium">压力大的时候，随时找我聊聊</p>
+                        <p className="text-sm font-medium">通义千问为您提供情绪支柱<br/>随时聊聊工作中的压力</p>
                       </div>
                     )}
                     {chatMessages.map((m, i) => (
@@ -345,7 +318,7 @@ const App: React.FC = () => {
                     {isLoading && (
                       <div className="flex justify-start">
                         <div className="bg-white p-4 rounded-[20px] rounded-tl-none shadow-soft border border-[#F5E1E5]">
-                          <div className="flex gap-1.5 animate-pulse">...</div>
+                          <div className="flex gap-1.5 animate-pulse">正在输入...</div>
                         </div>
                       </div>
                     )}
@@ -383,7 +356,7 @@ const App: React.FC = () => {
                         onClick={handleEndAndSaveChat}
                         className="w-full mt-4 py-3 bg-[#FFFACD] text-[#E9967A] rounded-cute text-xs font-bold flex items-center justify-center gap-2 shadow-sm border border-[#FFE4C4]"
                       >
-                        <Save size={16} /> 归纳今日心情日记 🧸
+                        <Save size={16} /> 归纳心情日记 🧸
                       </button>
                     )}
                   </div>
@@ -422,12 +395,12 @@ const MoodDiaryView: React.FC<{ diaries: DiaryEntry[]; saveDiaries: (d: DiaryEnt
         date: new Date().toISOString(),
         content,
         summary,
-        images: [] // 移除图片生成，直接存文字
+        images: []
       };
       saveDiaries([newEntry, ...diaries]);
       setContent('');
     } catch (error: any) {
-      alert("保存心情失败。请重试，或检查网络连接。");
+      alert("保存失败：" + error.message);
     } finally {
       setIsProcessing(false);
     }
